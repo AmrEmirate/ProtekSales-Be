@@ -214,10 +214,13 @@ export class AdminController {
       const { id } = req.params;
       const { action, resolutionNotes } = req.body;
 
-      if (!action || !['APPROVE_CLAIMANT', 'REJECT_CLAIMANT'].includes(action)) {
+      const isApprove = action === 'APPROVE_CLAIMANT' || action === 'TRANSFER';
+      const isReject = action === 'REJECT_CLAIMANT' || action === 'REJECT';
+
+      if (!action || (!isApprove && !isReject)) {
         return sendError(
           res,
-          'Aksi penyelesaian harus salah satu dari: APPROVE_CLAIMANT (alihkan hak ke pelapor) atau REJECT_CLAIMANT (pertahankan pemilik saat ini).',
+          'Aksi penyelesaian harus salah satu dari: APPROVE_CLAIMANT / TRANSFER (alihkan hak ke pelapor) atau REJECT_CLAIMANT / REJECT (pertahankan pemilik saat ini).',
           400
         );
       }
@@ -231,7 +234,7 @@ export class AdminController {
         return sendError(res, 'Data sengketa tidak ditemukan.', 404);
       }
 
-      if (action === 'APPROVE_CLAIMANT') {
+      if (isApprove) {
         // Alihkan kepemilikan lead ke claimantSalesId
         await prisma.lead.update({
           where: { id: dispute.leadId },
