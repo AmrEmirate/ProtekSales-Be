@@ -1,42 +1,35 @@
 # Stage 1: Build & compile TypeScript
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package definition files
+RUN apk add --no-cache openssl libc6-compat
+
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
 RUN npm install
-
-# Generate Prisma Client
 RUN npx prisma generate
 
-# Copy source code
 COPY . .
-
-# Compile TypeScript
 RUN npm run build
 
 # Stage 2: Production runner
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
+
+RUN apk add --no-cache openssl libc6-compat
 
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Install production dependencies only
 COPY package*.json ./
+COPY prisma ./prisma/
 RUN npm install --omit=dev
 
-# Copy generated Prisma client from builder
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/prisma ./prisma
-
-# Copy compiled JavaScript files
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 5000
