@@ -1,5 +1,6 @@
 import prisma from '../config/prisma';
 import { LicenseStatus, InvoiceStatus } from '@prisma/client';
+import { CloudPosIntegrationService } from './cloudPosIntegration';
 
 export interface HeartbeatResult {
   status: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED';
@@ -156,6 +157,13 @@ export class LicenseService {
         outlet: true,
       },
     });
+
+    // Sinkronkan status saklar langsung ke Cloud POS Engine
+    CloudPosIntegrationService.syncLicenseToCloudPos(
+      updatedLicense.licenseKey,
+      targetStatus,
+      updatedLicense.suspendedReason || undefined
+    ).catch((err) => console.warn('[CloudPosSync Warning]', err));
 
     return updatedLicense;
   }

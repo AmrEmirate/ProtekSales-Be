@@ -30,4 +30,10 @@ router.post('/disputes/:id/resolve', AdminController.resolveDispute);
 // 7. Daftar Sales
 router.get('/sales', AdminController.getAllSales);
 
+// 8. Integrasi & Monitoring Cloud POS Engine
+router.get('/cloudpos/health', AdminController.getCloudPosHealth);
+router.get('/cloudpos/tenants', AdminController.getCloudPosTenants);
+router.post('/cloudpos/sync-tenants', AdminController.syncCloudPosTenants);
+router.get('/cloudpos/analytics', AdminController.getCloudPosAnalytics);
+
 export default router;

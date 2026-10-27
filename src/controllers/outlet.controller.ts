@@ -4,6 +4,8 @@ import prisma from '../config/prisma';
 import { sendSuccess, sendError } from '../utils/response';
 import { InvoiceStatus, LicenseStatus, LeadStatus } from '@prisma/client';
 import { sanitizePhoneNumber } from '../utils/phoneSanitizer';
+import { getPackageByCodeOrFee } from '../constants/plans';
+import { CloudPosIntegrationService } from '../services/cloudPosIntegration';
 
 export class OutletController {
   /**
@@ -123,7 +125,59 @@ export class OutletController {
         return sendError(res, 'Anda tidak memiliki akses ke data outlet ini.', 403);
       }
 
-      return sendSuccess(res, 'Detail outlet berhasil diambil.', outlet);
+      // Ambil data operasional live dari Cloud POS BE jika lisensi tersedia
+      let cloudPosOperational = null;
+      if (outlet.license?.licenseKey) {
+        cloudPosOperational = await CloudPosIntegrationService.getTenantByLicense(outlet.license.licenseKey);
+      }
+
+      return sendSuccess(res, 'Detail outlet berhasil diambil.', {
+        ...outlet,
+        cloudPosOperational,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Mengambil data telemetri & transaksi kasir live dari Cloud POS BE untuk outlet tertentu
+   * GET /api/outlets/:id/cloudpos-live
+   */
+  static async getOutletCloudPosLive(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const salesId = req.user!.userId;
+      const userRole = req.user!.role;
+
+      const outlet = await prisma.outlet.findUnique({
+        where: { id },
+        include: { license: true },
+      });
+
+      if (!outlet) {
+        return sendError(res, 'Outlet tidak ditemukan.', 404);
+      }
+
+      if (userRole !== 'ADMIN' && outlet.salesId !== salesId) {
+        return sendError(res, 'Anda tidak memiliki akses ke data outlet ini.', 403);
+      }
+
+      if (!outlet.license?.licenseKey) {
+        return sendSuccess(res, 'Outlet belum memiliki lisensi POS yang terdaftar.', {
+          connected: false,
+          licenseKey: null,
+          data: null,
+        });
+      }
+
+      const liveData = await CloudPosIntegrationService.getTenantByLicense(outlet.license.licenseKey);
+
+      return sendSuccess(res, 'Data operasional live Cloud POS berhasil diambil.', {
+        connected: !!liveData,
+        licenseKey: outlet.license.licenseKey,
+        data: liveData,
+      });
     } catch (error) {
       next(error);
     }
@@ -137,7 +191,7 @@ export class OutletController {
     try {
       const currentSalesId = req.user!.userId;
       const userRole = req.user!.role;
-      const { leadId, name, ownerName, phone, address, latitude, longitude, monthlyFee, salesId } = req.body;
+      const { leadId, name, ownerName, phone, address, latitude, longitude, monthlyFee, salesId, planCode, packageTier } = req.body;
 
       // Assign sales: jika admin membuatkan untuk sales tertentu, gunakan salesId dari body
       const assignedSalesId = userRole === 'ADMIN' && salesId ? salesId : currentSalesId;
@@ -146,6 +200,10 @@ export class OutletController {
       if (!name || !ownerName || !cleanPhone || !address) {
         return sendError(res, 'Nama outlet, nama pemilik, nomor telepon, dan alamat wajib diisi.', 400);
       }
+
+      // Hitung paket langganan (100k, 150k, 200k, 250k)
+      const packagePlan = getPackageByCodeOrFee(planCode || packageTier || monthlyFee);
+      const effectiveMonthlyFee = packagePlan.monthlyFee;
 
       // Generate lisensi acak: PROPOS-XXXX-XXXX
       const randomKeyPart1 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -163,7 +221,7 @@ export class OutletController {
           address,
           latitude: latitude ? parseFloat(latitude) : undefined,
           longitude: longitude ? parseFloat(longitude) : undefined,
-          monthlyFee: monthlyFee ? parseFloat(monthlyFee) : 150000,
+          monthlyFee: effectiveMonthlyFee,
           license: {
             create: {
               licenseKey: generatedLicenseKey,
@@ -185,7 +243,16 @@ export class OutletController {
         });
       }
 
-      return sendSuccess(res, 'Outlet dan lisensi POS berhasil dibuat.', outlet, 201);
+      // Otomatis sinkronkan dan lakukan provisioning tenant di Cloud POS API
+      CloudPosIntegrationService.provisionTenantToCloudPos({
+        name: outlet.name,
+        ownerName: outlet.ownerName,
+        phone: outlet.phone,
+        planCode: packagePlan.code,
+        licenseKey: generatedLicenseKey,
+      }).catch((err) => console.warn('[AutoProvision Warning]', err));
+
+      return sendSuccess(res, `Outlet ${outlet.name} (${packagePlan.name}) dan lisensi POS berhasil dibuat & disinkronkan ke Cloud POS.`, outlet, 201);
     } catch (error: any) {
       return sendError(res, error.message || 'Gagal membuat outlet.', 400);
     }

@@ -4,6 +4,7 @@ import prisma from '../config/prisma';
 import { sendSuccess, sendError } from '../utils/response';
 import { BillingService } from '../services/billing.service';
 import { LicenseService } from '../services/license.service';
+import { CloudPosIntegrationService } from '../services/cloudPosIntegration';
 import { LicenseStatus, WithdrawalStatus, DisputeStatus, CommissionStatus } from '@prisma/client';
 
 export class AdminController {
@@ -301,6 +302,158 @@ export class AdminController {
       });
 
       return sendSuccess(res, 'Daftar sales berhasil diambil.', salesList);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 8. Cek Status Koneksi Cloud POS Backend Engine
+   * GET /api/admin/cloudpos/health
+   */
+  static async getCloudPosHealth(_req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const health = await CloudPosIntegrationService.checkCloudPosHealth();
+      return sendSuccess(res, 'Status koneksi Cloud POS berhasil diperiksa.', health);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 9. Mengambil Seluruh Tenant dari Cloud POS BE & Cross-check dengan Outlet ProtekSales
+   * GET /api/admin/cloudpos/tenants
+   */
+  static async getCloudPosTenants(_req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const cloudTenants = await CloudPosIntegrationService.getAllTenants();
+      const protekOutlets = await prisma.outlet.findMany({
+        include: {
+          license: true,
+          sales: { select: { id: true, name: true, phone: true } },
+        },
+      });
+
+      // Mapping status integrasi
+      const mappedTenants = cloudTenants.map((t: any) => {
+        const matchingOutlet = protekOutlets.find(
+          (o) => (t.licenseKey && o.license?.licenseKey === t.licenseKey) ||
+                 (t.mainOutlet?.phone && o.phone === t.mainOutlet.phone)
+        );
+
+        return {
+          ...t,
+          isLinkedToProtek: !!matchingOutlet,
+          protekOutlet: matchingOutlet
+            ? {
+                id: matchingOutlet.id,
+                name: matchingOutlet.name,
+                salesName: matchingOutlet.sales?.name,
+                licenseKey: matchingOutlet.license?.licenseKey,
+                licenseStatus: matchingOutlet.license?.status,
+              }
+            : null,
+        };
+      });
+
+      return sendSuccess(res, 'Daftar tenant Cloud POS berhasil diambil.', {
+        total: mappedTenants.length,
+        linkedCount: mappedTenants.filter((t: any) => t.isLinkedToProtek).length,
+        unlinkedCount: mappedTenants.filter((t: any) => !t.isLinkedToProtek).length,
+        tenants: mappedTenants,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 10. Sinkronisasi Otomatis Seluruh Tenant dari Cloud POS BE ke ProtekSales
+   * POST /api/admin/cloudpos/sync-tenants
+   */
+  static async syncCloudPosTenants(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const adminUserId = req.user!.userId;
+      const cloudTenants = await CloudPosIntegrationService.getAllTenants();
+
+      if (cloudTenants.length === 0) {
+        return sendSuccess(res, 'Tidak ada tenant yang ditemukan di Cloud POS atau service offline.', {
+          totalSynced: 0,
+          createdCount: 0,
+        });
+      }
+
+      const existingLicenses = await prisma.license.findMany({
+        select: { licenseKey: true, outletId: true },
+      });
+      const existingLicenseMap = new Set(existingLicenses.map((l) => l.licenseKey));
+
+      let createdCount = 0;
+      let alreadyLinkedCount = 0;
+
+      for (const tenant of cloudTenants) {
+        if (!tenant.licenseKey) continue;
+
+        if (existingLicenseMap.has(tenant.licenseKey)) {
+          alreadyLinkedCount++;
+          continue;
+        }
+
+        // Buat outlet baru di ProtekSales terhubung ke tenant Cloud POS
+        const newOutlet = await prisma.outlet.create({
+          data: {
+            salesId: adminUserId,
+            name: tenant.name,
+            ownerName: 'Merchant Cloud POS',
+            phone: tenant.mainOutlet?.phone || '628120000000',
+            address: 'Alamat Merchant Cloud POS',
+            monthlyFee: tenant.pricePerOutlet ? parseFloat(tenant.pricePerOutlet) : 100000,
+            license: {
+              create: {
+                licenseKey: tenant.licenseKey,
+                status: tenant.status === 'ACTIVE' ? LicenseStatus.ACTIVE : LicenseStatus.SUSPENDED,
+              },
+            },
+          },
+        });
+
+        // Buat invoice perdana
+        const invDate = new Date();
+        const invoiceNumber = `INV-${invDate.getFullYear()}${String(invDate.getMonth() + 1).padStart(2, '0')}-${newOutlet.id.slice(0, 4).toUpperCase()}`;
+        await prisma.invoice.create({
+          data: {
+            outletId: newOutlet.id,
+            invoiceNumber,
+            amount: newOutlet.monthlyFee,
+            billingPeriod: `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, '0')}`,
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            status: 'PAID',
+            paidAt: new Date(),
+          },
+        });
+
+        existingLicenseMap.add(tenant.licenseKey);
+        createdCount++;
+      }
+
+      return sendSuccess(res, `Sinkronisasi selesai! ${createdCount} tenant baru berhasil diimpor ke ProtekSales.`, {
+        totalCloudTenants: cloudTenants.length,
+        createdCount,
+        alreadyLinkedCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 11. Mengambil Analitik Konsolidasi Platform Cloud POS
+   * GET /api/admin/cloudpos/analytics
+   */
+  static async getCloudPosAnalytics(_req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const analytics = await CloudPosIntegrationService.getPlatformAnalytics();
+      return sendSuccess(res, 'Analitik platform Cloud POS berhasil diambil.', analytics);
     } catch (error) {
       next(error);
     }

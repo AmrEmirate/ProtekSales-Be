@@ -2,6 +2,7 @@ import prisma from '../config/prisma';
 import { InvoiceStatus, LicenseStatus } from '@prisma/client';
 import { CommissionService } from './commission.service';
 import { config } from '../config/env';
+import { CloudPosIntegrationService } from './cloudPosIntegration';
 
 export class BillingService {
   /**
@@ -55,6 +56,12 @@ export class BillingService {
             suspendedReason: null,
           },
         });
+
+        // Sinkronkan aktivasi lisensi ke Cloud POS
+        CloudPosIntegrationService.syncLicenseToCloudPos(
+          invoice.outlet.license.licenseKey,
+          'ACTIVE'
+        ).catch((err) => console.warn('[CloudPosSync Warning]', err));
       }
     }
 
@@ -109,6 +116,13 @@ export class BillingService {
             suspendedReason: `Tagihan periode ${inv.billingPeriod} menunggak melewati batas toleransi.`,
           },
         });
+
+        // Sinkronkan suspensi kill-switch ke Cloud POS
+        CloudPosIntegrationService.syncLicenseToCloudPos(
+          inv.outlet.license.licenseKey,
+          'SUSPENDED',
+          `Tagihan periode ${inv.billingPeriod} menunggak melewati batas toleransi.`
+        ).catch((err) => console.warn('[CloudPosSync Warning]', err));
       }
     }
 

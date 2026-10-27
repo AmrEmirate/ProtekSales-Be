@@ -7,6 +7,7 @@ import invoiceRoutes from './invoice.routes';
 import licenseRoutes from './license.routes';
 import adminRoutes from './admin.routes';
 import salesRoutes from './sales.routes';
+import { PROTEK_PACKAGES } from '../constants/plans';
 
 const router = Router();
 
@@ -25,6 +26,14 @@ router.get('/health', (req, res) => {
     status: 'ok',
     service: 'ProtekSales API Server',
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Paket Berlangganan POS (4 Paket Resmi)
+router.get('/plans', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    data: Object.values(PROTEK_PACKAGES),
   });
 });
 
