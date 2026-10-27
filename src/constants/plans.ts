@@ -10,7 +10,7 @@ export interface PackagePlan {
 export const PROTEK_PACKAGES: Record<string, PackagePlan> = {
   PAKET_100K: {
     code: 'PAKET_100K',
-    name: 'Paket Hemat (200 Tx/Hari)',
+    name: 'Paket 1: Hemat (200 Tx/Hari)',
     monthlyFee: 100000,
     dailyTxLimit: 200,
     monthlyTxLimit: 6000, // 200 x 30 hari
@@ -18,7 +18,7 @@ export const PROTEK_PACKAGES: Record<string, PackagePlan> = {
   },
   PAKET_150K: {
     code: 'PAKET_150K',
-    name: 'Paket Bisnis (300 Tx/Hari)',
+    name: 'Paket 2: Bisnis (300 Tx/Hari)',
     monthlyFee: 150000,
     dailyTxLimit: 300,
     monthlyTxLimit: 9000, // 300 x 30 hari
@@ -26,7 +26,7 @@ export const PROTEK_PACKAGES: Record<string, PackagePlan> = {
   },
   PAKET_200K: {
     code: 'PAKET_200K',
-    name: 'Paket Pro (500 Tx/Hari)',
+    name: 'Paket 3: Pro (500 Tx/Hari)',
     monthlyFee: 200000,
     dailyTxLimit: 500,
     monthlyTxLimit: 15000, // 500 x 30 hari
@@ -34,11 +34,11 @@ export const PROTEK_PACKAGES: Record<string, PackagePlan> = {
   },
   PAKET_250K: {
     code: 'PAKET_250K',
-    name: 'Paket Unlimited (Tanpa Batas)',
+    name: 'Paket 4: Unlimited (Tanpa Batas)',
     monthlyFee: 250000,
     dailyTxLimit: 0,
     monthlyTxLimit: 0,
-    description: 'Rp 250.000/bln - Transaksi tanpa batas kuota (Unlimited)',
+    description: 'Rp 250.000/bln - Unlimited transaksi selama sebulan (Tanpa Batas Kuota)',
   },
 };
 
