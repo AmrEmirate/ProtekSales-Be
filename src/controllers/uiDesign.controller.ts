@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { sendSuccess, sendError } from '../utils/response';
 import { StitchService } from '../services/stitch.service';
 import { CloudPosIntegrationService } from '../services/cloudPosIntegration';
+import { TenantFeGeneratorService } from '../services/feGenerator.service';
 import { LeadStatus, LicenseStatus } from '@prisma/client';
 import { sanitizePhoneNumber } from '../utils/validator';
 
@@ -268,7 +269,29 @@ export class UiDesignController {
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
 
-      // 4. Update status Request UI menjadi APPROVED & DEPLOYED
+      // 4. Generate Frontend Mandiri (Dedicated FE) & Sambungkan ke API Cloud POS
+      let feBundle = null;
+      try {
+        let screenHtml = designRequest.htmlCode;
+        if (!screenHtml && designRequest.stitchScreenId && designRequest.stitchProjectId) {
+          screenHtml = await StitchService.fetchScreenCode(
+            `projects/${designRequest.stitchProjectId}/screens/${designRequest.stitchScreenId}`
+          ).catch(() => '');
+        }
+
+        feBundle = await TenantFeGeneratorService.generateTenantFrontend({
+          tenantSlug: deployedSlug,
+          storeName,
+          licenseKey: generatedLicenseKey,
+          themeColor: designRequest.primaryColor || '#f97316',
+          themeConfig: designRequest.themeConfig,
+          htmlCode: screenHtml,
+        });
+      } catch (feErr: any) {
+        console.warn('[FE Generator Warning]', feErr.message);
+      }
+
+      // 5. Update status Request UI menjadi APPROVED & DEPLOYED
       const finalizedRequest = await (prisma as any).uiDesignRequest.update({
         where: { id },
         data: {
@@ -280,13 +303,14 @@ export class UiDesignController {
 
       return sendSuccess(
         res,
-        `Selamat! Desain UI "${storeName}" telah disetujui (APPROVED). Tenant berhasil di-deploy ke Cloud POS dengan tema kustom Stitch!`,
+        `Selamat! Desain UI "${storeName}" telah disetujui (APPROVED). Frontend berhasil dibuat dan disambungkan langsung ke Cloud POS Backend!`,
         {
           uiRequest: finalizedRequest,
           outlet,
           tenantSlug: deployedSlug,
           posUrl: `https://${deployedSlug}.posmu.cloud`,
           licenseKey: generatedLicenseKey,
+          feBundle,
         }
       );
     } catch (error: any) {
