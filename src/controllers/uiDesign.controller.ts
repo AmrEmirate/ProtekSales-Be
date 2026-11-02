@@ -5,6 +5,7 @@ import { sendSuccess, sendError } from '../utils/response';
 import { StitchService } from '../services/stitch.service';
 import { CloudPosIntegrationService } from '../services/cloudPosIntegration';
 import { TenantFeGeneratorService } from '../services/feGenerator.service';
+import { CloudflareDnsService } from '../services/cloudflareDns.service';
 import { LeadStatus, LicenseStatus } from '@prisma/client';
 import { sanitizePhoneNumber } from '../utils/validator';
 
@@ -269,7 +270,11 @@ export class UiDesignController {
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
 
-      // 4. Generate Frontend Mandiri (Dedicated FE) & Sambungkan ke API Cloud POS
+      // 4. Otomatis Daftarkan Subdomain Online di Cloudflare (HTTPS SSL Aktif)
+      const dnsResult = await CloudflareDnsService.createTenantSubdomain(deployedSlug);
+      const onlinePosUrl = dnsResult.liveUrl;
+
+      // 5. Generate Frontend Mandiri (Dedicated FE) & Sambungkan ke API Cloud POS
       let feBundle = null;
       try {
         let screenHtml = designRequest.htmlCode;
@@ -291,7 +296,7 @@ export class UiDesignController {
         console.warn('[FE Generator Warning]', feErr.message);
       }
 
-      // 5. Update status Request UI menjadi APPROVED & DEPLOYED
+      // 6. Update status Request UI menjadi APPROVED & DEPLOYED
       const finalizedRequest = await (prisma as any).uiDesignRequest.update({
         where: { id },
         data: {
@@ -303,12 +308,13 @@ export class UiDesignController {
 
       return sendSuccess(
         res,
-        `Selamat! Desain UI "${storeName}" telah disetujui (APPROVED). Frontend berhasil dibuat dan disambungkan langsung ke Cloud POS Backend!`,
+        `Selamat! Desain UI "${storeName}" telah disetujui (APPROVED). Subdomain "${dnsResult.fullDomain}" telah dibuat dan online!`,
         {
           uiRequest: finalizedRequest,
           outlet,
           tenantSlug: deployedSlug,
-          posUrl: `https://${deployedSlug}.posmu.cloud`,
+          subdomain: dnsResult.fullDomain,
+          posUrl: onlinePosUrl,
           licenseKey: generatedLicenseKey,
           feBundle,
         }
