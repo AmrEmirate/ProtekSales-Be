@@ -1,13 +1,13 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { prisma } from '../config/database';
+import prisma from '../config/prisma';
 import { sendSuccess, sendError } from '../utils/response';
 import { StitchService } from '../services/stitch.service';
 import { CloudPosIntegrationService } from '../services/cloudPosIntegration';
 import { TenantFeGeneratorService } from '../services/feGenerator.service';
 import { CloudflareDnsService } from '../services/cloudflareDns.service';
 import { LeadStatus, LicenseStatus } from '@prisma/client';
-import { sanitizePhoneNumber } from '../utils/validator';
+import { sanitizePhoneNumber } from '../utils/phoneSanitizer';
 
 export class UiDesignController {
   /**
