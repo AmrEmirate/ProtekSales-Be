@@ -110,3 +110,4 @@ describe('White Box Testing: license.service.ts (Heartbeat & Remote Kill-Switch)
     expect(result.outlet?.name).toBe('Bakso Super Lezat');
   });
 });
+
