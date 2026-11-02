@@ -15,4 +15,5 @@ export const config = {
   invoiceGracePeriodDays: process.env.INVOICE_GRACE_PERIOD_DAYS ? parseInt(process.env.INVOICE_GRACE_PERIOD_DAYS, 10) : 3,
   cloudPosApiUrl: process.env.CLOUD_POS_API_URL || 'http://localhost:3000/api/v1',
   internalServiceKey: process.env.INTERNAL_SERVICE_KEY || 'protek-cloudpos-sync-secret-2026',
+  stitchApiKey: process.env.STITCH_API_KEY || '',
 };

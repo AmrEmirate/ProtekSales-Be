@@ -66,6 +66,9 @@ export class CloudPosIntegrationService {
     phone: string;
     planCode: string;
     licenseKey: string;
+    themeColor?: string;
+    themeConfig?: any;
+    customDomain?: string;
   }) {
     try {
       const response = await fetch(`${CLOUD_POS_API_URL}/internal/provision-tenant`, {

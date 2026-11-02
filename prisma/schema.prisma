@@ -73,6 +73,7 @@ model User {
   commissions       Commission[]   @relation("SalesCommissions")
   withdrawals       Withdrawal[]   @relation("SalesWithdrawals")
   disputesClaimed   DisputeClaim[] @relation("ClaimantSales")
+  uiRequests        UiDesignRequest[] @relation("SalesUiRequests")
 
   @@map("users")
 }
@@ -96,6 +97,7 @@ model Lead {
   visits         VisitLog[]
   outlet         Outlet?
   disputes       DisputeClaim[]
+  uiRequests     UiDesignRequest[]
 
   @@index([phone])
   @@index([salesId])
@@ -247,4 +249,34 @@ model Withdrawal {
   @@index([salesId])
   @@index([status])
   @@map("withdrawals")
+}
+
+model UiDesignRequest {
+  id                 String      @id @default(uuid())
+  leadId             String?
+  salesId            String
+  storeName          String
+  category           String      @default("F&B")
+  primaryColor       String?     @default("#ea580c")
+  referenceImageUrl  String?
+  styleNotes         String?
+  stitchProjectId    String?
+  stitchScreenId     String?
+  previewUrl         String?
+  htmlCode           String?     @db.Text
+  themeConfig        Json?
+  revisionNotes      String?
+  revisionHistory    Json?
+  status             String      @default("REQUESTED") // REQUESTED, GENERATING, READY_REVIEW, REVISION_REQUESTED, APPROVED, DEPLOYED
+  deployedTenantSlug String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  lead               Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  sales              User        @relation("SalesUiRequests", fields: [salesId], references: [id], onDelete: Cascade)
+
+  @@index([salesId])
+  @@index([leadId])
+  @@index([status])
+  @@map("ui_design_requests")
 }

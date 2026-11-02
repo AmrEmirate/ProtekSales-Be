@@ -7,6 +7,7 @@ import invoiceRoutes from './invoice.routes';
 import licenseRoutes from './license.routes';
 import adminRoutes from './admin.routes';
 import salesRoutes from './sales.routes';
+import uiDesignRoutes from './uiDesign.routes';
 import { PROTEK_PACKAGES } from '../constants/plans';
 
 const router = Router();
@@ -19,6 +20,7 @@ router.use('/invoices', invoiceRoutes);
 router.use('/license', licenseRoutes);
 router.use('/admin', adminRoutes);
 router.use('/sales', salesRoutes);
+router.use('/ui-design', uiDesignRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
