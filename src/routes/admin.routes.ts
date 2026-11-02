@@ -27,10 +27,15 @@ router.post('/licenses/:id/toggle', AdminController.toggleLicenseSwitch);
 router.get('/disputes', AdminController.getDisputes);
 router.post('/disputes/:id/resolve', AdminController.resolveDispute);
 
-// 7. Daftar Sales
+// 7. Daftar Sales & Atur Persentase Komisi
 router.get('/sales', AdminController.getAllSales);
+router.patch('/sales/commission-rate/bulk', AdminController.updateBulkCommissionRate);
+router.patch('/sales/:id/commission-rate', AdminController.updateSalesCommissionRate);
 
-// 8. Integrasi & Monitoring Cloud POS Engine
+// 8. Pengajuan Desain UI UMKM
+router.get('/ui-designs', AdminController.getAllUiDesigns);
+
+// 9. Integrasi & Monitoring Cloud POS Engine
 router.get('/cloudpos/health', AdminController.getCloudPosHealth);
 router.get('/cloudpos/tenants', AdminController.getCloudPosTenants);
 router.post('/cloudpos/sync-tenants', AdminController.syncCloudPosTenants);

@@ -458,4 +458,88 @@ export class AdminController {
       next(error);
     }
   }
+
+  /**
+   * 12. Atur Persentase Komisi Sales Khusus (Misal: 20%, 25%, dsb.)
+   * PATCH /api/admin/sales/:id/commission-rate
+   */
+  static async updateSalesCommissionRate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { commissionRate } = req.body;
+
+      if (commissionRate === undefined || isNaN(Number(commissionRate))) {
+        return sendError(res, 'Nilai persentase komisi (commissionRate) harus berupa angka valid.', 400);
+      }
+
+      const rate = parseFloat(commissionRate);
+      if (rate < 0 || rate > 100) {
+        return sendError(res, 'Persentase komisi harus di antara 0% dan 100%.', 400);
+      }
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { commissionRate: rate },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          commissionRate: true,
+        },
+      });
+
+      return sendSuccess(res, `Persentase komisi untuk ${updated.name} berhasil diperbarui menjadi ${rate}%.`, updated);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 13. Atur Persentase Komisi Global untuk Seluruh Tim Sales Sekaligus
+   * PATCH /api/admin/sales/commission-rate/bulk
+   */
+  static async updateBulkCommissionRate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { commissionRate } = req.body;
+      if (commissionRate === undefined || isNaN(Number(commissionRate))) {
+        return sendError(res, 'Nilai persentase komisi harus berupa angka valid.', 400);
+      }
+
+      const rate = parseFloat(commissionRate);
+      if (rate < 0 || rate > 100) {
+        return sendError(res, 'Persentase komisi harus di antara 0% dan 100%.', 400);
+      }
+
+      const updateResult = await prisma.user.updateMany({
+        where: { role: 'SALES' },
+        data: { commissionRate: rate },
+      });
+
+      return sendSuccess(res, `Persentase komisi untuk ${updateResult.count} mitra sales berhasil diset ke ${rate}%.`, {
+        updatedCount: updateResult.count,
+        commissionRate: rate,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 14. Ambil Seluruh Pengajuan Desain UI UMKM oleh Sales
+   * GET /api/admin/ui-designs
+   */
+  static async getAllUiDesigns(_req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const requests = await prisma.uiDesignRequest.findMany({
+        include: {
+          sales: { select: { id: true, name: true, phone: true } },
+          lead: { select: { id: true, storeName: true, phone: true, address: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return sendSuccess(res, 'Daftar pengajuan desain UI UMKM berhasil diambil.', requests);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
