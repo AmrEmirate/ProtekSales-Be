@@ -79,6 +79,23 @@ async function main() {
   });
   console.log(`✅ Akun Sales 1 dibuat: ${sales1.email} (Password: sales123)`);
 
+  // 3b. Akun Sales Alias (sales@protek.id)
+  const salesAlias = await prisma.user.create({
+    data: {
+      name: 'Budi Santoso (Mitra Sales)',
+      email: 'sales@protek.id',
+      password: salesPasswordHash,
+      phone: '6281234567891',
+      role: Role.SALES,
+      commissionRate: 25.0,
+      bankName: 'BCA (Bank Central Asia)',
+      bankAccountNumber: '8800123456',
+      bankAccountHolder: 'Budi Santoso',
+      tier: 'Gold Specialist',
+    },
+  });
+  console.log(`✅ Akun Sales Alias dibuat: ${salesAlias.email} (Password: sales123)`);
+
   // 4. Akun Sales 2 (Untuk Uji Coba Anti-Tabrakan)
   const sales2 = await prisma.user.create({
     data: {

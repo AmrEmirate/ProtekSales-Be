@@ -128,6 +128,9 @@ export class CommissionService {
 
   /**
    * Pengajuan penarikan dana komisi oleh sales
+   * Aturan Mutlak:
+   * 1. Penarikan hanya boleh 1 kali per bulan kalender.
+   * 2. 1 kali penarikan WAJIB menghabiskan SEMUA saldo yang ada (All-or-Nothing).
    */
   static async requestWithdrawal(
     salesId: string,
@@ -138,18 +141,59 @@ export class CommissionService {
       accountHolder: string;
     }
   ) {
-    if (amount < config.minimumWithdrawalAmount) {
+    // 1. Cek apakah ada penarikan yang masih berstatus PENDING
+    const pendingWithdrawal = await prisma.withdrawal.findFirst({
+      where: {
+        salesId,
+        status: WithdrawalStatus.PENDING,
+      },
+    });
+
+    if (pendingWithdrawal) {
       throw new Error(
-        `Batas minimum penarikan dana adalah Rp ${config.minimumWithdrawalAmount.toLocaleString('id-ID')}.`
+        'Anda masih memiliki pengajuan penarikan berstatus PENDING. Harap menunggu hingga Admin memproses transfer manual.'
       );
     }
 
-    const wallet = await this.getSalesWalletSummary(salesId);
-    if (amount > wallet.readyBalance) {
+    // 2. Cek frekuensi: Hanya boleh melakukan penarikan 1 bulan sekali
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    const existingThisMonth = await prisma.withdrawal.findFirst({
+      where: {
+        salesId,
+        createdAt: {
+          gte: startOfMonth,
+        },
+        status: {
+          not: WithdrawalStatus.REJECTED,
+        },
+      },
+    });
+
+    if (existingThisMonth) {
       throw new Error(
-        `Saldo komisi siap ditarik tidak mencukupi. Saldo tersedia: Rp ${wallet.readyBalance.toLocaleString(
-          'id-ID'
-        )}.`
+        'Penarikan komisi hanya dapat dilakukan 1 kali per bulan. Anda sudah memiliki transaksi penarikan pada periode bulan ini.'
+      );
+    }
+
+    // 3. Ambil ringkasan dompet komisi sales
+    const wallet = await this.getSalesWalletSummary(salesId);
+
+    if (wallet.readyBalance <= 0) {
+      throw new Error('Tidak ada saldo komisi yang siap ditarik saat ini.');
+    }
+
+    if (wallet.readyBalance < config.minimumWithdrawalAmount) {
+      throw new Error(
+        `Batas minimum saldo untuk penarikan adalah Rp ${config.minimumWithdrawalAmount.toLocaleString('id-ID')}. Saldo Anda saat ini: Rp ${wallet.readyBalance.toLocaleString('id-ID')}.`
+      );
+    }
+
+    // 4. Validasi All-or-Nothing: 1 kali penarikan WAJIB menghabiskan SEMUA saldo yang ada
+    if (Math.round(amount) !== Math.round(wallet.readyBalance)) {
+      throw new Error(
+        `Penarikan komisi wajib mencairkan seluruh saldo yang tersedia (Rp ${Math.round(wallet.readyBalance).toLocaleString('id-ID')}). Penarikan sebagian tidak diperkenankan sesuai kebijakan kemitraan PT Pro Teknologi.`
       );
     }
 

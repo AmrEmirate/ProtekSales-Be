@@ -123,18 +123,21 @@ export class AdminController {
         return sendError(res, 'Data penarikan dana tidak ditemukan.', 404);
       }
 
+      const finalStatus =
+        status === WithdrawalStatus.APPROVED ? WithdrawalStatus.COMPLETED : status;
+
       const updated = await prisma.withdrawal.update({
         where: { id },
         data: {
-          status,
-          adminNotes,
+          status: finalStatus,
+          adminNotes: adminNotes || withdrawal.adminNotes,
           proofUrl: proofUrl || withdrawal.proofUrl,
           processedAt: new Date(),
         },
       });
 
-      // Jika completed, update status komisi sales terkait menjadi WITHDRAWN
-      if (status === WithdrawalStatus.COMPLETED) {
+      // Jika completed atau approved, update status komisi sales terkait menjadi WITHDRAWN
+      if (finalStatus === WithdrawalStatus.COMPLETED) {
         // Ambil komisi-komisi READY milik sales tersebut hingga mencukupi amount withdrawal
         const readyCommissions = await prisma.commission.findMany({
           where: { salesId: withdrawal.salesId, status: CommissionStatus.READY },
@@ -152,7 +155,7 @@ export class AdminController {
         }
       }
 
-      return sendSuccess(res, `Pengajuan penarikan dana berhasil diperbarui menjadi ${status}.`, updated);
+      return sendSuccess(res, `Pengajuan penarikan dana berhasil diperbarui menjadi ${finalStatus}.`, updated);
     } catch (error) {
       next(error);
     }

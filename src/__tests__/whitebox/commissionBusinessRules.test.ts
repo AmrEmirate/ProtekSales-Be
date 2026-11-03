@@ -77,11 +77,42 @@ describe('White Box Testing: Commission & Tax Mathematics', () => {
       expect(requested < minLimit).toBe(true);
     });
 
-    it('should reject withdrawal when requested amount exceeds available balance', () => {
-      const available = 200000;
-      const requested = 250000;
+    it('should enforce All-or-Nothing policy: withdrawal amount must equal 100% of available ready balance', () => {
+      const availableBalance = 500000;
+      const partialWithdrawal = 300000;
+      const fullWithdrawal = 500000;
 
-      expect(requested > available).toBe(true);
+      // Rule: partial withdrawal is rejected
+      expect(Math.round(partialWithdrawal) === Math.round(availableBalance)).toBe(false);
+
+      // Rule: full balance withdrawal is accepted
+      expect(Math.round(fullWithdrawal) === Math.round(availableBalance)).toBe(true);
+    });
+
+    it('should enforce 1-time per calendar month frequency limitation', () => {
+      const now = new Date(2026, 10, 15); // 15 Nov 2026
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+      const withdrawal1Date = new Date(2026, 10, 5); // 5 Nov 2026 (same month)
+      const isSameMonth = withdrawal1Date >= startOfMonth;
+      expect(isSameMonth).toBe(true);
+
+      const nextAttemptAllowedDate = new Date(2026, 11, 1); // 1 Dec 2026 (next month)
+      const isNextMonth = nextAttemptAllowedDate >= new Date(2026, 11, 1);
+      expect(isNextMonth).toBe(true);
+    });
+
+    it('should validate manual bank transfer details and proof url on payout approval', () => {
+      const payoutPayload = {
+        withdrawalId: 'wd-001',
+        status: 'COMPLETED',
+        proofUrl: 'https://storage.vimtk.cloud/proofs/mbca-ref-88291.jpg',
+        adminNotes: 'Transfer manual m-BCA Ref: 8829104 atas nama Budi Santoso',
+      };
+
+      expect(payoutPayload.status).toBe('COMPLETED');
+      expect(payoutPayload.proofUrl).toContain('https://');
+      expect(payoutPayload.adminNotes).toContain('Ref: 8829104');
     });
   });
 });
